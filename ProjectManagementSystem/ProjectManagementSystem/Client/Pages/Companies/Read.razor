@@ -1,0 +1,112 @@
+﻿@page "/companies/read/{Id:guid}"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Company Details</h3>
+
+<hr />
+
+<h4>Company Name</h4>
+<p>
+    @Company.Name
+</p>
+
+<h4>Company Address</h4>
+<p>
+    @Company.Address
+</p>
+
+<h4>Company Phone</h4>
+<p>
+    @Company.Phone
+</p>
+
+<h4>Company Email</h4>
+<p>
+    @Company.Email
+</p>
+
+<h4>Company Registration Date</h4>
+<p>
+    @Company.RegistrationDate
+</p>
+
+<h4>Assigned Projects</h4>
+
+<ul>
+    @if (Company.Projects != null)
+    {
+        @foreach (var project in Company.Projects)
+        {
+            <li>
+                @project.Name
+            </li>
+        }
+    }
+</ul>
+
+<div>
+    <button class="btn btn-secondary" @onclick='() => Navigate("return")'>
+        Return
+    </button>
+    <button value="edit" class="btn btn-primary" @onclick='() => Navigate("edit")'>
+        Edit
+    </button>
+    <button value="delete" class="btn btn-danger" @onclick='() => Navigate("delete")'>
+        Delete
+    </button>
+</div>
+
+@code {
+
+    [Parameter] public Guid Id { get; set; }
+    private Company Company { get; set; } = new Company();
+    private List<Project> Projects { get; set; } = new List<Project>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            Company = await Http.GetFromJsonAsync<Company>($"/api/Companies/{Id}");
+            Projects = await Http.GetFromJsonAsync<List<Project>>("/api/Projects");
+
+            Company.Projects = new List<Project>();
+
+            foreach (var project in Projects)
+            {
+                if (project.CompanyId == Company.Id)
+                {
+                    Company.Projects.Add(project);
+                }
+            }
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void Navigate(string buttonId)
+    {
+        switch (buttonId)
+        {
+            case "edit":
+                Navigation.NavigateTo($"companies/update/{Company.Id}");
+                break;
+            case "delete":
+                Navigation.NavigateTo($"companies/delete/{Company.Id}");
+                break;
+            default:
+                Navigation.NavigateTo("/companies");
+                break;
+        }
+    }
+}

@@ -1,0 +1,127 @@
+﻿@page "/ticketboard/read/{Id:guid}"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Your Ticket Details</h3>
+
+<hr />
+
+<h4>Ticket Name</h4>
+<p>
+    @Ticket.Name
+</p>
+
+<h4>Ticket Description</h4>
+<p>
+    @Ticket.Description
+</p>
+
+<h4>Ticket State</h4>
+<p>
+    @Ticket.State
+</p>
+
+<h4>Ticket Start Date</h4>
+<p>
+    @Ticket.StartDate
+</p>
+
+<h4>Ticket Completion Date</h4>
+<p>
+    @Ticket.EndDate
+</p>
+
+<h4>Ticket Deadline</h4>
+<p>
+    @Ticket.Deadline
+</p>
+
+<h4>Related Project</h4>
+<p>
+    @Project.Name
+</p>
+
+<h4>Assigned Users</h4>
+<ul>
+    @if (AssignedUsers != null)
+    {
+        @foreach (var user in AssignedUsers)
+        {
+            <li>
+                @user.FirstName @user.LastName
+            </li>
+        }
+    }
+</ul>
+
+<div>
+    <button class="btn btn-secondary" @onclick='() => Navigate("return")'>
+        Return
+    </button>
+    <button value="edit" class="btn btn-primary" @onclick='() => Navigate("edit")'>
+        Change State
+    </button>
+</div>
+
+@code {
+
+    [Parameter] public Guid Id { get; set; }
+    private Ticket Ticket { get; set; } = new Ticket();
+    private Project Project { get; set; } = new Project();
+    private List<UserTicket> UserTickets { get; set; } = new List<UserTicket>();
+    private List<User> Users { get; set; } = new List<User>();
+    private List<User> AssignedUsers { get; set; } = new List<User>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Ticket = await Http.GetFromJsonAsync<Ticket>($"/api/Tickets/{Id}");
+            Project = await Http.GetFromJsonAsync<Project>($"/api/Projects/{Ticket.ProjectId}");
+            UserTickets = await Http.GetFromJsonAsync<List<UserTicket>>("/api/UserTickets");
+            Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+
+            //Initialise list to avoid nullReferenceException
+            Ticket.UserTickets = new List<UserTicket>();
+
+            //Retrieve linked UserTickets
+            foreach (var userTicket in UserTickets)
+            {
+                if (userTicket.TicketId == Ticket.Id)
+                {
+                    Ticket.UserTickets.Add(userTicket);
+                }
+            }
+
+            //Retrieve linked Users
+            foreach (var userTicket in Ticket.UserTickets)
+            {
+                AssignedUsers.Add(Users.Find(user => user.Id == userTicket.UserId));
+            }
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void Navigate(string buttonId)
+    {
+        switch (buttonId)
+        {
+            case "edit":
+                Navigation.NavigateTo($"ticketboard/update/{Ticket.Id}");
+                break;
+            default:
+                Navigation.NavigateTo("/ticketboard");
+                break;
+        }
+    }
+}

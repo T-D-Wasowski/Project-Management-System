@@ -1,0 +1,151 @@
+﻿@page "/projects/read/{Id:guid}"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Project Details</h3>
+
+<hr />
+
+<h4>Project Name</h4>
+<p>
+    @Project.Name
+</p>
+
+<h4>Project Start Date</h4>
+<p>
+    @Project.StartDate
+</p>
+
+<h4>Project Completion Date</h4>
+<p>
+    @Project.EndDate
+</p>
+
+<h4>Project Deadline</h4>
+<p>
+    @Project.Deadline
+</p>
+
+<h4>Issuing Company</h4>
+
+<p>
+    @Company.Name
+</p>
+
+<h4>Assigned Users</h4>
+<ul>
+    @if (AssignedUsers != null)
+    {
+        @foreach (var user in AssignedUsers)
+        {
+            <li>
+                @user.FirstName @user.LastName
+            </li>
+        }
+    }
+</ul>
+
+<h4>Assigned Tickets</h4>
+<ul>
+    @if (Project.Tickets != null)
+    {
+        @foreach (var ticket in Project.Tickets)
+        {
+            <li>
+                @ticket.Name
+            </li>
+        }
+    }
+</ul>
+
+
+<div>
+    <button class="btn btn-secondary" @onclick='() => Navigate("return")'>
+        Return
+    </button>
+    <button value="edit" class="btn btn-primary" @onclick='() => Navigate("edit")'>
+        Edit
+    </button>
+    <button value="delete" class="btn btn-danger" @onclick='() => Navigate("delete")'>
+        Delete
+    </button>
+</div>
+
+@code {
+
+    [Parameter] public Guid Id { get; set; }
+    private Project Project { get; set; } = new Project();
+    private Company Company { get; set; } = new Company();
+    private List<Ticket> Tickets { get; set; } = new List<Ticket>();
+    private List<ProjectUser> ProjectUsers { get; set; } = new List<ProjectUser>();
+    private List<User> Users { get; set; } = new List<User>();
+    private List<User> AssignedUsers { get; set; } = new List<User>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Project = await Http.GetFromJsonAsync<Project>($"/api/Projects/{Id}");
+            Company = await Http.GetFromJsonAsync<Company>($"/api/Companies/{Project.CompanyId}");
+            Tickets = await Http.GetFromJsonAsync<List<Ticket>>("/api/Tickets");
+            ProjectUsers = await Http.GetFromJsonAsync<List<ProjectUser>>("/api/ProjectUsers");
+            Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+
+            Project.Tickets = new List<Ticket>();
+
+            //Retrieve assigned tickets
+            foreach (var ticket in Tickets)
+            {
+                if (ticket.ProjectId == Project.Id)
+                {
+                    Project.Tickets.Add(ticket);
+                }
+            }
+
+            //Initialise list to avoid nullReferenceException
+            Project.ProjectUsers = new List<ProjectUser>();
+
+            //Retrieve linked UserTickets
+            foreach (var projectUser in ProjectUsers)
+            {
+                if (projectUser.ProjectId == Project.Id)
+                {
+                    Project.ProjectUsers.Add(projectUser);
+                }
+            }
+
+            //Retrieve linked Users
+            foreach (var projectUser in Project.ProjectUsers)
+            {
+                AssignedUsers.Add(Users.Find(user => user.Id == projectUser.UserId));
+            }
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void Navigate(string buttonId)
+    {
+        switch (buttonId)
+        {
+            case "edit":
+                Navigation.NavigateTo($"projects/update/{Project.Id}");
+                break;
+            case "delete":
+                Navigation.NavigateTo($"projects/delete/{Project.Id}");
+                break;
+            default:
+                Navigation.NavigateTo("/projects");
+                break;
+        }
+    }
+}

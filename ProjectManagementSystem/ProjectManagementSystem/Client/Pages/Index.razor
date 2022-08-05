@@ -1,0 +1,93 @@
+﻿@page "/"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<p>
+    Initializing...
+</p>
+
+@code {
+
+    private List<User> Users { get; set; } = new List<User>();
+    private List<string> ApplicationUserEmails { get; set; } = new List<string>();
+    private List<UserTicket> UserTickets { get; set; } = new List<UserTicket>();
+    private List<ProjectUser> ProjectUsers { get; set; } = new List<ProjectUser>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+        ApplicationUserEmails = await Http.GetFromJsonAsync<List<string>>("/api/ApplicationUsers");
+        UserTickets = await Http.GetFromJsonAsync<List<UserTicket>>("/api/UserTickets");
+        ProjectUsers = await Http.GetFromJsonAsync<List<ProjectUser>>("/api/ProjectUsers");
+
+        try
+        {
+            //delete any no-longer-existing users
+            foreach (var user in Users)
+            {
+                if (ApplicationUserEmails.Contains(user.Email))
+                {
+                    continue;
+                }
+                else
+                {
+                    //delete all related userticket assignments
+                    foreach (var userTicket in UserTickets)
+                    {
+                        if (userTicket.UserId == user.Id)
+                        {
+                            var responseUserTicket = await Http.DeleteAsync($"/api/UserTickets/{userTicket.Id}");
+                            responseUserTicket.EnsureSuccessStatusCode();
+                        }
+                    }
+
+                    //delete all related projectuser assignments
+                    foreach (var projectUser in ProjectUsers)
+                    {
+                        if (projectUser.UserId == user.Id)
+                        {
+                            var responseUserTicket = await Http.DeleteAsync($"/api/ProjectUsers/{projectUser.Id}");
+                            responseUserTicket.EnsureSuccessStatusCode();
+                        }
+                    }
+
+                    //delete user
+                    var responseUser = await Http.DeleteAsync($"/api/Users/{user.Id}");
+                    responseUser.EnsureSuccessStatusCode();
+                }
+            }
+
+            //create new users
+            foreach (var applicationUserEmail in ApplicationUserEmails)
+            {
+                if (Users.Find(user => user.Email == applicationUserEmail) == null)
+                {
+                    var response = await Http.PostAsJsonAsync("/api/Users", new User()
+                    {
+                        FirstName = "(Please Update)",
+                        LastName = "(Please Update)",
+                        Email = applicationUserEmail,
+                        RegistrationDate = DateTime.Now,
+                    });
+                    response.EnsureSuccessStatusCode();
+                }
+            }
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+
+        Navigation.NavigateTo("/ticketboard");
+    }
+
+}
+
+

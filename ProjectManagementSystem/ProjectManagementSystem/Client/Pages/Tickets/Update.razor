@@ -1,0 +1,210 @@
+﻿@page "/tickets/update/{Id:guid}"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Edit a Ticket</h3>
+
+<hr />
+
+<EditForm Model="Ticket" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label class="control-label">Ticket Name</label>
+        <InputText @bind-Value="Ticket.Name" class="form-control" />
+        <ValidationMessage For="@(() => Ticket.Name)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Ticket Description</label>
+        <InputTextArea @bind-Value="Ticket.Description" class="form-control" />
+        <ValidationMessage For="@(() => Ticket.Description)" />
+    </div>
+
+    <br />
+
+    <label class="control-label">Related Project</label>
+    <InputSelect @bind-Value="Ticket.State" class="form-control">
+        <option>Opened</option>
+        <option>In Progress</option>
+        <option>Delayed</option>
+        <option>Completed</option>
+    </InputSelect>
+    <ValidationMessage For="@(() => Ticket.State)" />
+
+    <br />
+
+    <div>
+        <label class="control-label">Ticket Completion Date</label>
+        <InputDate @bind-Value="Ticket.EndDate" class="form-control" />
+        <ValidationMessage For="@(() => Ticket.EndDate)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Ticket Deadline</label>
+        <InputDate @bind-Value="Ticket.Deadline" class="form-control" />
+        <ValidationMessage For="@(() => Ticket.Deadline)" />
+    </div>
+
+    <br />
+
+    <label class="control-label">Related Project</label>
+    <InputSelect @bind-Value="Ticket.ProjectId" class="form-control">
+        @foreach (var project in Projects)
+        {
+            <option label="@project.Name">@project.Id</option>
+        }
+    </InputSelect>
+    <ValidationMessage For="@(() => Ticket.ProjectId)" />
+
+    <p>
+        @Ticket.ProjectId
+    </p>
+
+    <div>
+        <label class="control-label">Assigned Users</label>
+        @foreach (var user in Users)
+        {
+            <div class="form-check">
+                @if (AssignedUsers.Contains(user))
+                {
+                    <input class="form-check-input" type="checkbox" id="flexCheckDefault" @onclick="(()=>handleCheckboxClick(user))" checked>
+                }
+                else
+                {
+                    <input class="form-check-input" type="checkbox" id="flexCheckDefault" @onclick="(()=>handleCheckboxClick(user))">
+                }
+                <label class="form-check-label" for="flexCheckDefault">@user.FirstName @user.LastName</label>
+            </div>
+        }
+    </div>
+
+    <br />
+
+    <button class="btn btn-secondary" @onclick='Return'>
+        Return
+    </button>
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Update
+    </button>
+
+</EditForm>
+
+@code {
+
+        [Parameter] public Guid Id { get; set; }
+        private Ticket Ticket { get; set; } = new Ticket();
+        private List<Project> Projects { get; set; } = new List<Project>();
+        private List<User> Users { get; set; } = new List<User>();
+        private List<User> AssignedUsers { get; set; } = new List<User>();
+        private List<UserTicket> UserTickets { get; set; } = new List<UserTicket>();
+
+        protected override async Task OnInitializedAsync()
+        {
+            try
+            {
+                Ticket = await Http.GetFromJsonAsync<Ticket>($"/api/Tickets/{Id}");
+                Projects = await Http.GetFromJsonAsync<List<Project>>("/api/Projects");
+                Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+                UserTickets = await Http.GetFromJsonAsync<List<UserTicket>>("/api/UserTickets");
+
+                Ticket.UserTickets = new List<UserTicket>();
+
+                //Retrieve linked UserTickets
+                foreach (var userTicket in UserTickets)
+                {
+                    if (userTicket.TicketId == Ticket.Id)
+                    {
+                        Ticket.UserTickets.Add(userTicket);
+                    }
+                }
+
+                //Retrieve linked Users
+                foreach (var userTicket in Ticket.UserTickets)
+                {
+                    AssignedUsers.Add(Users.Find(user => user.Id == userTicket.UserId));
+                }
+
+            }
+            catch (AccessTokenNotAvailableException exception)
+            {
+                exception.Redirect();
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        private async void HandleValidSubmit()
+        {
+            try
+            {
+                var response = await Http.PutAsJsonAsync($"/api/Tickets/{Ticket.Id}", Ticket);
+                response.EnsureSuccessStatusCode();
+
+                //remove old assignments
+                foreach (var userTicket in Ticket.UserTickets)
+                {
+                    if (AssignedUsers.Contains(Users.Find(user => user.Id == userTicket.UserId)))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        var responseUserTicketDelete = await Http.DeleteAsync($"/api/UserTickets/{userTicket.Id}");
+                        responseUserTicketDelete.EnsureSuccessStatusCode();
+                    }
+                }
+
+                //add new assignments
+                foreach (var user in AssignedUsers)
+                { 
+                    if (Ticket.UserTickets.Contains(UserTickets.Find(userTicket => userTicket.UserId == user.Id & userTicket.TicketId == Ticket.Id)))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        var responseUserTicketAdd = await Http.PostAsJsonAsync("/api/UserTickets", new UserTicket() { TicketId = Ticket.Id, UserId = user.Id });
+                        responseUserTicketAdd.EnsureSuccessStatusCode();
+                    }
+
+                }
+
+            Navigation.NavigateTo($"tickets/read/{Ticket.Id}");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void handleCheckboxClick(User user)
+    {
+        if (AssignedUsers.Contains(user))
+        {
+            AssignedUsers.Remove(user);
+        }
+        else
+        {
+            AssignedUsers.Add(user);
+        }
+    }
+
+    private void Return()
+    {
+        Navigation.NavigateTo("/tickets");
+    }
+
+}

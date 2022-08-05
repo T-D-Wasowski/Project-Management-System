@@ -1,0 +1,182 @@
+﻿@page "/predictionboard"
+
+@attribute [Authorize]
+@inject HttpClient Http
+
+<h3>Predictions Board</h3>
+
+<hr />
+
+<div class="form-group">
+    <label for="formControlSelect">Prediction Company</label>
+    <select class="form-control" id="formControlSelect" @onchange="GeneratePrediction">
+        <option selected disabled hidden label="-- select an option --"></option>
+        @foreach (var company in Companies)
+        {
+            <option label="@company.Name">@company.Id</option>
+        }
+    </select>
+</div>
+<div class="form-group">
+    <label for="inputDate">Prediction Date</label>
+    <input type="datetime-local" @bind="@PredictionDate" class="form-control" id="inputDate">
+</div>
+
+<hr />
+
+@if (Generated == true)
+{
+    <h4>
+        Projects Completed by Pediction Date
+    </h4>
+    <p>
+        This company is <b>@CompanyAge days</b> old. It has completed <b>@ProjectsCompleted projects</b> to date, and historically completes around <b>@ProjectsPerDay.ToString("0.####") projects per day</b>.
+    </p>
+    <p>
+        There are <b>@NumberOfDays days</b> from today until your selected prediction date.
+    </p>
+    <p>
+        Using this information, we can estimate that this company will complete <b>@PredictedProjectsCompleted.ToString("0.####") projects</b> by @PredictionDate.ToString("dd/MM/yyyy").
+    </p>
+
+    <h4>
+        Users Required to Complete Projects
+    </h4>
+    <p>
+        This company has <b>@TotalUsersAssignedToProjects users</b> assigned to it's completed projects, with an average number of <b>@AverageUsersPerProject.ToString("0.####") users per project</b>.
+    </p>
+    <p>
+        To complete <b>@PredictedProjectsCompleted.ToString("0.####") projects</b> by @PredictionDate.ToString("dd/MM/yyyy"), the company must assign <b>@PredictedUsersAssigned.ToString("0.####") users</b>.
+    </p>
+}
+else
+{
+    <p>
+        @Message
+    </p>
+}
+
+
+@code {
+
+    private bool Generated { get; set; } = false;
+    private string Message { get; set; } = "Please select a date, then select a company for the prediction.";
+
+    private double CompanyAge { get; set; }
+    private double ProjectsCompleted { get; set; }
+    private double ProjectsPerDay { get; set; } //x
+    private double NumberOfDays { get; set; } //N
+    private double PredictedProjectsCompleted { get; set; } //a
+    private double TotalUsersAssignedToProjects { get; set; }
+    private double AverageUsersPerProject { get; set; } //y
+    private double PredictedUsersAssigned { get; set; } //b
+
+    private DateTime PredictionDate { get; set; } = DateTime.Now.AddDays(8);
+    private List<Company> Companies { get; set; } = new List<Company>();
+    private List<Project> Projects { get; set; } = new List<Project>();
+    private List<ProjectUser> ProjectUsers { get; set; } = new List<ProjectUser>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Companies = await Http.GetFromJsonAsync<List<Company>>("/api/Companies");
+            Projects = await Http.GetFromJsonAsync<List<Project>>("/api/Projects");
+            ProjectUsers = await Http.GetFromJsonAsync<List<ProjectUser>>("/api/ProjectUsers");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void GeneratePrediction(ChangeEventArgs e)
+    {
+        Company company = Companies.Find(company => company.Id.ToString() == e.Value.ToString());
+
+        //calculate number of days between current date and prediction | N
+        double N = PredictionDate.Subtract(DateTime.Now).Days;
+        NumberOfDays = N;
+        Console.WriteLine("N = " + N);
+
+        //retrieve all completed company projects
+        company.Projects = new List<Project>();
+        foreach (var project in Projects)
+        {
+            if (project.CompanyId == company.Id)
+            {
+                if (project.EndDate != null)
+                {
+                    company.Projects.Add(project);
+                }
+            }
+        }
+        double projectsCount = company.Projects.Count;
+        Console.WriteLine("Company Projects Completed = " + projectsCount);
+        ProjectsCompleted = projectsCount;
+
+        //retrieve company age in days
+        double companyAge = DateTime.Now.Subtract(company.RegistrationDate).Days;
+        Console.WriteLine("Company Age = " + companyAge);
+        CompanyAge = companyAge;
+
+        if (projectsCount <= 0)
+        {
+            Generated = false;
+            Message = "This company does not have any completed projects to generate prediction from.";
+        }
+        else if (companyAge <= 0)
+        {
+            Generated = false;
+            Message = "This company has not been registered long enough to generate prediction.";
+        }
+        else
+        {
+            Generated = true;
+
+            //retrieve no of people assigned to all company projects
+            double totalUsersAssigned = 0;
+            foreach (var project in company.Projects)
+            {
+                foreach (var projectUser in ProjectUsers)
+                {
+                    if (projectUser.ProjectId == project.Id)
+                    {
+                        totalUsersAssigned++;
+                    }
+                }
+            }
+            Console.WriteLine("Total Users Assigned = " + totalUsersAssigned);
+            TotalUsersAssignedToProjects = totalUsersAssigned;
+
+            Console.WriteLine(totalUsersAssigned + "/" + projectsCount);
+            //calc average no of people assigned per project | y
+            double y = (totalUsersAssigned / projectsCount);
+            Console.WriteLine($"y = " + y.ToString("0.####"));
+            AverageUsersPerProject = y;
+
+            //calculate projects completed per days (projects completed / days) | x
+            double x = (projectsCount / companyAge);
+            Console.WriteLine($"x = " + x.ToString("0.####"));
+            ProjectsPerDay = x;
+
+            //calculate number of projects completed by prediction date | a = (x * N)
+            double a = (x * N);
+            Console.WriteLine($"a = " + a.ToString("0.####"));
+            PredictedProjectsCompleted = a;
+
+            //calculate number of people needed to be assigned to complete all projects by date | b = (a * y)
+            double b = (a * y);
+            Console.WriteLine($"b = " + b.ToString("0.####"));
+            PredictedUsersAssigned = b;
+        }
+
+    }
+
+
+
+}

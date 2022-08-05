@@ -1,0 +1,89 @@
+﻿@page "/companies/create"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Create a Company</h3>
+
+<hr />
+
+<EditForm Model="Company" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label class="control-label">Company Name</label>
+        <InputText @bind-Value="Company.Name" class="form-control" />
+        <ValidationMessage For="@(() => Company.Name)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Company Address</label>
+        <InputText @bind-Value="Company.Address" class="form-control" />
+        <ValidationMessage For="@(() => Company.Address)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Company Phone</label>
+        <InputText @bind-Value="Company.Phone" class="form-control" />
+        <ValidationMessage For="@(() => Company.Phone)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Company Email</label>
+        <InputText @bind-Value="Company.Email" class="form-control" />
+        <ValidationMessage For="@(() => Company.Email)" />
+    </div>
+
+    <br />
+
+    <button class="btn btn-secondary" @onclick='Return'>
+        Return
+    </button>
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Create
+    </button>
+
+</EditForm>
+
+
+@code {
+
+    private Company Company { get; set; } = new Company();
+
+    private async void HandleValidSubmit()
+    {
+        Company.RegistrationDate = DateTime.Now;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/Companies", Company);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var company = JsonConvert.DeserializeObject<Company>(content);
+            Navigation.NavigateTo($"companies/read/{company.Id}");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+
+    private void Return()
+    {
+        Navigation.NavigateTo("/companies");
+    }
+
+}

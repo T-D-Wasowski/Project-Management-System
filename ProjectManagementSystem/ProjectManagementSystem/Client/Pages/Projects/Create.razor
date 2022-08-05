@@ -1,0 +1,144 @@
+﻿@page "/projects/create"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Create a Project</h3>
+
+<hr />
+
+<EditForm Model="Project" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label class="control-label">Project Name</label>
+        <InputText @bind-Value="Project.Name" class="form-control" />
+        <ValidationMessage For="@(() => Project.Name)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Project Deadline</label>
+        <InputDate @bind-Value="Project.Deadline" class="form-control" />
+        <ValidationMessage For="@(() => Project.Deadline)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">Issuing Company</label>
+        <InputSelect @bind-Value="Project.CompanyId" class="form-control">
+            <option selected @bind="IsDisabled" hidden label="-- select an option --"></option>
+            @foreach (var company in Companies)
+            {
+                <option label="@company.Name">@company.Id</option>
+            }
+        </InputSelect>
+        <ValidationMessage For="@(() => Project.CompanyId)" />
+    </div>
+
+    <p>
+        @Project.CompanyId
+    </p>
+
+    <div>
+        <label class="control-label">Assigned Users</label>
+        @foreach (var user in Users)
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="flexCheckDefault" @onclick="(()=>handleCheckboxClick(user))">
+                <label class="form-check-label" for="flexCheckDefault">@user.FirstName @user.LastName</label>
+            </div>
+        }
+    </div>
+
+    <br />
+
+    <button class="btn btn-secondary" @onclick='Return'>
+        Return
+    </button>
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Create
+    </button>
+
+</EditForm>
+
+
+@code {
+
+    private Project Project { get; set; } = new Project();
+    private List<Company> Companies { get; set; } = new List<Company>();
+    private List<User> Users { get; set; } = new List<User>();
+    private List<User> AssignedUsers { get; set; } = new List<User>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Project.StartDate = DateTime.Now;
+
+        try
+        {
+            Companies = await Http.GetFromJsonAsync<List<Company>>("/api/Companies");
+            Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private async void HandleValidSubmit()
+    {
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/Projects", Project);
+            response.EnsureSuccessStatusCode();
+
+            var content = await response.Content.ReadAsStringAsync();
+            var project = JsonConvert.DeserializeObject<Project>(content);
+            Navigation.NavigateTo($"projects/read/{project.Id}");
+
+            if (AssignedUsers.Count > 0)
+            {
+                foreach (var user in AssignedUsers)
+                {
+                    var r = await Http.PostAsJsonAsync("/api/ProjectUsers", new ProjectUser() { ProjectId = project.Id, UserId = user.Id });
+                    r.EnsureSuccessStatusCode();
+                }
+            }
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void handleCheckboxClick(User user)
+    {
+        if (AssignedUsers.Contains(user))
+        {
+            AssignedUsers.Remove(user);
+        }
+        else
+        {
+            AssignedUsers.Add(user);
+        }
+    }
+
+
+    private void Return()
+    {
+        Navigation.NavigateTo("/projects");
+    }
+
+}

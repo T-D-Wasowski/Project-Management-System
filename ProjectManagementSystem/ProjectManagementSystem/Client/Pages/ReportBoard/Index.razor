@@ -1,0 +1,244 @@
+﻿@page "/reportboard"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3>Reports Board</h3>
+
+<hr />
+
+<div class="form-group">
+    <label for="formControlSelect">Project for Report</label>
+    <select class="form-control" id="formControlSelect" @onchange="GeneratePrediction">
+        <option selected disabled hidden label="-- select an option --"></option>
+        @foreach (var project in Projects)
+        {
+            <option label="@project.Name">@project.Id</option>
+        }
+    </select>
+</div>
+
+<hr />
+
+@if (Generated == true)
+{
+    <h4>Project Development Progress Report</h4>
+    <p>
+        This project is issued by <b>@Company.Name</b> as one of <b>@TotalCompanyProjects projects</b> issued by this company. This project has <b>@ProjectAssignedUsers assigned users</b> and <b>@ProjectAssignedTickets assigned tickets</b>.
+    </p>
+    <p>
+        That is a difference of <b>@AssignedUserProjectCompanyDifference.ToString("0.####") users</b> and <b>@AssignedTicketProjectCompanyDifference.ToString("0.####") tickets</b> compared to the average <b>@AverageCompanyAssignedUsers.ToString("0.####") users</b> and <b>@AverageCompanyAssignedTickets.ToString("0.####") tickets</b> of all the other projects issued by <b>@Company.Name</b>.
+    </p>
+    <p>
+        Out of the <b>@ProjectAssignedTickets tickets</b> assigned to this project, <b>@ProjectCompletedTickets of them are complete</b>, which means this project is <b>@ProjectCompletedTicketsPercentage.ToString("0.####")% complete</b>.
+    </p>
+
+    <h4>Project User Productivity Report</h4>
+    <p>
+        This project has <b>@ProjectAssignedUsers users</b> working on it. These users are:
+    </p>
+    <ul class="list-group">
+        @foreach (var user in AssignedUsers)
+        {
+            <li class="list-group-item"> 
+                <ul class="list-group">
+                    <li class="list-group-item"><b>@user.FirstName @user.LastName</b></li>
+                    <li class="list-group-item">Working on <b>@user.UserTickets.Count tickets</b> across <b>@user.ProjectUsers.Count different projects</b></li>
+                </ul>
+            </li>
+        }
+    </ul>
+
+
+}
+else
+{
+    <p>
+        @Message
+    </p>
+}
+
+
+@code {
+
+    private bool Generated { get; set; } = false;
+    private string Message { get; set; } = "Please select a project for the report.";
+
+    private double TotalCompanyProjects { get; set; }
+    private double TotalCompanyAssignedUsers { get; set; }
+    private double TotalCompanyAssignedTickets { get; set; }
+    private double AverageCompanyAssignedUsers { get; set; }
+    private double AverageCompanyAssignedTickets { get; set; }
+
+    private double ProjectAssignedUsers { get; set; }
+    private double AssignedUserProjectCompanyDifference { get; set; }
+    private double AssignedUserProjectCompanyPercentage { get; set; }
+
+    private double ProjectAssignedTickets { get; set; }
+    private double AssignedTicketProjectCompanyDifference { get; set; }
+    private double AssignedTicketProjectCompanyPercentage { get; set; }
+
+    private double ProjectCompletedTickets { get; set; }
+    private double ProjectCompletedTicketsPercentage { get; set; }
+
+    private Company Company {get;set;} = new Company();
+    private List<Company> Companies { get; set; } = new List<Company>();
+    private List<Project> Projects { get; set; } = new List<Project>();
+    private List<Ticket> Tickets { get; set; } = new List<Ticket>();
+    private List<ProjectUser> ProjectUsers { get; set; } = new List<ProjectUser>();
+    private List<User> Users { get; set; } = new List<User>();
+    private List<User> AssignedUsers { get; set; } = new List<User>();
+    private List<UserTicket> UserTickets { get; set; } = new List<UserTicket>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Companies = await Http.GetFromJsonAsync<List<Company>>("/api/Companies");
+            Projects = await Http.GetFromJsonAsync<List<Project>>("/api/Projects");
+            Tickets = await Http.GetFromJsonAsync<List<Ticket>>("/api/Tickets");
+            ProjectUsers = await Http.GetFromJsonAsync<List<ProjectUser>>("/api/ProjectUsers");
+            UserTickets = await Http.GetFromJsonAsync<List<UserTicket>>("/api/UserTickets");
+            Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void GeneratePrediction(ChangeEventArgs e)
+    {
+        Generated = true;
+
+        Project project = Projects.Find(project => project.Id.ToString() == e.Value.ToString());
+        Company = Companies.Find(company => company.Id == project.CompanyId);
+
+        //Retrieve company projects
+        Company.Projects = new List<Project>();
+        foreach (var p in Projects)
+        {
+            if (p.CompanyId == Company.Id)
+            {
+                Company.Projects.Add(p);
+            }
+        }
+
+        //Retrieve each company projects projectUsers
+        foreach (var companyProject in Company.Projects)
+        {
+            companyProject.ProjectUsers = new List<ProjectUser>();
+            foreach (var projectUser in ProjectUsers)
+            {
+                if (projectUser.ProjectId == companyProject.Id)
+                {
+                    companyProject.ProjectUsers.Add(projectUser);
+                }
+            }
+
+            companyProject.Tickets = new List<Ticket>();
+            foreach(var ticket in Tickets)
+            {
+                if (ticket.ProjectId == companyProject.Id)
+                {
+                    companyProject.Tickets.Add(ticket);
+                }
+            }
+        }
+
+        //Retrieve project projectUsers
+        project.ProjectUsers = new List<ProjectUser>();
+        foreach (var projectUser in ProjectUsers)
+        {
+            if (projectUser.ProjectId == project.Id)
+            {
+                project.ProjectUsers.Add(projectUser);
+            }
+        }
+
+        AssignedUsers = new List<User>();
+        //Retrieve assigned users
+        foreach (var projectUser in project.ProjectUsers)
+        {
+            AssignedUsers.Add(Users.Find(user => user.Id == projectUser.UserId));
+        }
+
+        foreach (var user in AssignedUsers)
+        {
+            user.UserTickets = new List<UserTicket>();
+            user.ProjectUsers = new List<ProjectUser>();
+
+            foreach (var userTicket in UserTickets)
+            {
+                if (userTicket.UserId == user.Id)
+                {
+                    user.UserTickets.Add(userTicket);
+                }
+            }
+
+            foreach (var projectUser in ProjectUsers)
+            {
+                if (projectUser.UserId == user.Id)
+                {
+                    user.ProjectUsers.Add(projectUser);
+                }
+            }
+        }
+
+        //Retrieve assigned tickets
+        project.Tickets = new List<Ticket>();
+        foreach (var ticket in Tickets)
+        {
+            if (ticket.ProjectId == project.Id)
+            {
+                project.Tickets.Add(ticket);
+            }
+        }
+
+        TotalCompanyProjects = Company.Projects.Count;
+
+        TotalCompanyAssignedUsers = 0;
+        TotalCompanyAssignedTickets = 0;
+        foreach (var companyProject in Company.Projects)
+        {
+            TotalCompanyAssignedUsers += companyProject.ProjectUsers.Count;
+            TotalCompanyAssignedTickets += companyProject.Tickets.Count;
+        }
+
+        AverageCompanyAssignedUsers = (TotalCompanyAssignedUsers / TotalCompanyProjects);
+        AverageCompanyAssignedTickets = (TotalCompanyAssignedTickets / TotalCompanyProjects);
+
+        ProjectAssignedUsers = project.ProjectUsers.Count;
+        AssignedUserProjectCompanyDifference = (ProjectAssignedUsers - AverageCompanyAssignedUsers);
+        AssignedUserProjectCompanyPercentage = (ProjectAssignedUsers / TotalCompanyAssignedUsers);
+
+        ProjectAssignedTickets = project.Tickets.Count;
+        AssignedTicketProjectCompanyDifference = (ProjectAssignedTickets - AverageCompanyAssignedTickets);
+        AssignedTicketProjectCompanyPercentage = (ProjectAssignedTickets / TotalCompanyAssignedTickets);
+
+        List<Ticket> completedTickets = new List<Ticket>();
+        foreach (var ticket in project.Tickets)
+        {
+            if(ticket.EndDate != null)
+            {
+                completedTickets.Add(ticket);
+            }
+
+        }
+
+        ProjectCompletedTickets = completedTickets.Count;
+        ProjectCompletedTicketsPercentage = ((ProjectCompletedTickets / ProjectAssignedTickets) * 100);
+
+        //----------------------------------------------------------------------------------------------------
+
+    }
+
+
+
+}

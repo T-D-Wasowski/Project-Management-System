@@ -1,0 +1,73 @@
+﻿@page "/tickets"
+
+@attribute [Authorize]
+@inject HttpClient Http
+
+<h3>All Tickets</h3>
+
+<hr />
+
+<div class="table-responsive">
+
+    <table class="table table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>Ticket Name</th>
+                <th>Related Project</th>
+                <th>View Details</th>
+                <th>Edit Details</th>
+                <th>Delete Ticket</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var ticket in Tickets)
+            {
+                <tr>
+                    <td>
+                        @ticket.Name
+                    </td>
+                    <td>
+                        @Projects.Find(project => project.Id == ticket.ProjectId).Name
+                    </td>
+                    <td>
+                        <a href="/tickets/read/@ticket.Id">View</a>
+                    </td>
+                    <td>
+                        <a href="/tickets/update/@ticket.Id">Edit</a>
+                    </td>
+                    <td>
+                        <a href="/tickets/delete/@ticket.Id">Delete</a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<p>
+    <a class="btn btn-primary" href="/tickets/create">Create Ticket</a>
+</p>
+
+@code {
+
+    private List<Ticket> Tickets { get; set; } = new List<Ticket>();
+    private List<Project> Projects { get; set; } = new List<Project>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Tickets = await Http.GetFromJsonAsync<List<Ticket>>("/api/Tickets");
+            Projects = await Http.GetFromJsonAsync<List<Project>>("/api/Projects");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+}

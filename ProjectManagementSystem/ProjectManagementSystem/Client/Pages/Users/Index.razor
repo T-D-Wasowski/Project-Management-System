@@ -1,0 +1,69 @@
+﻿@page "/users"
+
+@attribute [Authorize]
+@inject HttpClient Http
+
+<h3>All Users</h3>
+
+<hr />
+
+<div class="table-responsive">
+
+    <table class="table table-hover">
+        <thead class="thead-dark">
+            <tr>
+                <th>User First Name</th>
+                <th>User Last Name</th>
+                <th>User Email</th>
+                <th>View User Details</th>
+                <th>Edit User Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var user in Users)
+            {
+            <tr>
+                <td>
+                    @user.FirstName
+                </td>
+                <td>
+                    @user.LastName
+                </td>
+                <td>
+                    @user.Email
+                </td>
+                <td>
+                    <a href="/users/read/@user.Id">View</a>
+                </td>
+                <td>
+                    <a href="/users/update/@user.Id">Edit</a>
+                </td>
+            </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+
+    private List<User> Users { get; set; } = new List<User>();
+    private List<string> ApplicationUserEmails { get; set; } = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Users = await Http.GetFromJsonAsync<List<User>>("/api/Users");
+
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+}

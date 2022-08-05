@@ -1,0 +1,109 @@
+﻿@page "/users/update/{Id:guid}"
+
+@attribute [Authorize]
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<h3>Edit the User @User.Email</h3>
+
+<hr />
+
+<EditForm Model="User" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label class="control-label">User First Name</label>
+        <InputText @bind-Value="User.FirstName" class="form-control" />
+        <ValidationMessage For="@(() => User.FirstName)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">User Last Name</label>
+        <InputText @bind-Value="User.LastName" class="form-control" />
+        <ValidationMessage For="@(() => User.LastName )" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">User Age</label>
+        <InputNumber @bind-Value="User.Age" class="form-control" />
+        <ValidationMessage For="@(() => User.Age)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">User Phone</label>
+        <InputText @bind-Value="User.Phone" class="form-control" />
+        <ValidationMessage For="@(() => User.Phone)" />
+    </div>
+
+    <br />
+
+    <div>
+        <label class="control-label">User Address</label>
+        <InputText @bind-Value="User.Address" class="form-control" />
+        <ValidationMessage For="@(() => User.Address)" />
+    </div>
+
+    <br />
+
+    <button class="btn btn-secondary" @onclick='Return'>
+        Return
+    </button>
+    <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i> Update
+    </button>
+
+</EditForm>
+
+@code {
+
+    [Parameter] public Guid Id { get; set; }
+    private User User { get; set; } = new User();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            User = await Http.GetFromJsonAsync<User>($"/api/Users/{Id}");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private async void HandleValidSubmit()
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"/api/Users/{User.Id}", User);
+            response.EnsureSuccessStatusCode();
+
+            Navigation.NavigateTo($"users/read/{User.Id}");
+        }
+        catch (AccessTokenNotAvailableException exception)
+        {
+            exception.Redirect();
+        }
+        catch (Exception)
+        {
+            throw;
+        }
+    }
+
+    private void Return()
+    {
+        Navigation.NavigateTo("/users");
+    }
+
+}
+
